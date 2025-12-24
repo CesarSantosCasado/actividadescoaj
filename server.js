@@ -189,7 +189,7 @@ app.post('/api/inscribir', async (req, res) => {
           }
         ]
       },
-      timeout: 15000
+      timeout: 30000
     });
 
     console.log(`[${new Date().toISOString()}] ✅ Inscripción exitosa`);
