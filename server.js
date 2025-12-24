@@ -35,9 +35,11 @@ app.post('/api/login', async (req, res) => {
   try {
     const { alias, contrasena } = req.body;
     
-    console.log(`[${new Date().toISOString()}] Login intento: ${alias}`);
+    console.log('='.repeat(50));
+    console.log(`[${new Date().toISOString()}] 🔐 Login intento: ${alias}`);
     const startTime = Date.now();
 
+    console.log(`[${new Date().toISOString()}] 📡 Consultando AppSheet...`);
     const response = await axios({
       url: `https://api.appsheet.com/api/v2/apps/${CONFIG.appId}/tables/UsuariosLoginActividades/Action?applicationAccessKey=${CONFIG.accessKey}`,
       method: 'post',
@@ -51,23 +53,27 @@ app.post('/api/login', async (req, res) => {
         },
         "Rows": []
       },
-      timeout: 30000
+      timeout: 30000  // 30 segundos
     });
 
     const responseTime = Date.now() - startTime;
-    console.log(`[${new Date().toISOString()}] AppSheet respondió en ${responseTime}ms`);
+    console.log(`[${new Date().toISOString()}] ✅ AppSheet respondió en ${responseTime}ms`);
 
     const usuarios = response.data || [];
+    console.log(`[${new Date().toISOString()}] 👥 Usuarios encontrados: ${usuarios.length}`);
 
     if (usuarios.length === 0) {
-      console.log(`[${new Date().toISOString()}] Usuario no encontrado: ${alias}`);
+      console.log(`[${new Date().toISOString()}] ❌ Usuario NO encontrado: ${alias}`);
+      console.log('='.repeat(50));
       return res.json({ success: false, message: 'Usuario no encontrado' });
     }
 
     const usuario = usuarios[0];
+    console.log(`[${new Date().toISOString()}] 🔍 Validando contraseña...`);
 
     if (usuario.Contraseña === contrasena) {
-      console.log(`[${new Date().toISOString()}] Login exitoso: ${alias} (${responseTime}ms)`);
+      console.log(`[${new Date().toISOString()}] ✅ Login EXITOSO: ${alias} (${responseTime}ms)`);
+      console.log('='.repeat(50));
       return res.json({
         success: true,
         usuario: {
@@ -76,15 +82,18 @@ app.post('/api/login', async (req, res) => {
         }
       });
     } else {
-      console.log(`[${new Date().toISOString()}] Contraseña incorrecta: ${alias}`);
+      console.log(`[${new Date().toISOString()}] ❌ Contraseña INCORRECTA: ${alias}`);
+      console.log('='.repeat(50));
       return res.json({ success: false, message: 'Contraseña incorrecta' });
     }
 
   } catch (error) {
-    console.error(`[${new Date().toISOString()}] Error en login:`, error.message);
+    console.error('='.repeat(50));
+    console.error(`[${new Date().toISOString()}] ❌ ERROR en login:`, error.message);
+    console.error('='.repeat(50));
     
     if (error.code === 'ECONNABORTED') {
-      return res.status(408).json({ success: false, message: 'Tiempo de espera agotado' });
+      return res.status(408).json({ success: false, message: 'AppSheet tardó demasiado en responder' });
     }
     
     res.status(500).json({ success: false, message: 'Error en el servidor' });
