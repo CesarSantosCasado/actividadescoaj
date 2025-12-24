@@ -1,8 +1,7 @@
-// package.json
 {
-  "name": "coaj-actividades",
+  "name": "coaj-backend",
   "version": "1.0.0",
-  "description": "Sistema de actividades COAJ Madrid",
+  "description": "API Backend COAJ",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
