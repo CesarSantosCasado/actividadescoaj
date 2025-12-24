@@ -51,7 +51,7 @@ app.post('/api/login', async (req, res) => {
         },
         "Rows": []
       },
-      timeout: 10000
+      timeout: 30000
     });
 
     const responseTime = Date.now() - startTime;
