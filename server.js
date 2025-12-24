@@ -30,6 +30,7 @@ function buildRequest(tabla) {
   };
 }
 
+// ENDPOINT DE LOGIN
 app.post('/api/login', async (req, res) => {
   try {
     const { alias, contrasena } = req.body;
@@ -37,7 +38,6 @@ app.post('/api/login', async (req, res) => {
     console.log(`[${new Date().toISOString()}] Login intento: ${alias}`);
     const startTime = Date.now();
 
-    // BUSCAR EN LA TABLA UsuariosLoginActividades (sin relaciones)
     const response = await axios({
       url: `https://api.appsheet.com/api/v2/apps/${CONFIG.appId}/tables/UsuariosLoginActividades/Action?applicationAccessKey=${CONFIG.accessKey}`,
       method: 'post',
@@ -91,10 +91,63 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// ENDPOINT DE DATOS
+app.get('/api/datos', async (req, res) => {
+  try {
+    console.log(`[${new Date().toISOString()}] Solicitando datos...`);
+    
+    const [actividadesRes, vigentesRes] = await Promise.all([
+      axios(buildRequest("ActividadesVigentes")),
+      axios(buildRequest("ActividadVigente"))
+    ]);
+
+    const actividades = actividadesRes.data || [];
+    const actividadVigente = vigentesRes.data || [];
+
+    actividades.sort((a, b) => (a.Actividad || "").localeCompare(b.Actividad || ""));
+
+    console.log(`[${new Date().toISOString()}] Datos enviados: ${actividades.length} actividades`);
+
+    res.json({
+      actividades,
+      actividadVigente
+    });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error en /api/datos:`, error.message);
+    res.status(500).json({ error: 'Error al obtener datos' });
+  }
+});
+
+// HEALTH CHECK
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
+// RUTA RAÍZ
 app.get('/', (req, res) => {
-  res.json({ message: 'API COAJ Backend funcionando' });
+  res.json({ 
+    message: 'API COAJ Backend funcionando',
+    endpoints: {
+      login: 'POST /api/login',
+      datos: 'GET /api/datos',
+      health: 'GET /health'
+    }
+  });
 });
 
 app.listen(PORT, () => {
-  console.log(`Servidor en puerto ${PORT}`);
+  console.log(`✅ Servidor en puerto ${PORT}`);
+  console.log(`📍 Endpoints disponibles:`);
+  console.log(`   - POST /api/login`);
+  console.log(`   - GET /api/datos`);
+  console.log(`   - GET /health`);
 });
+
+// MANTENER SERVIDOR DESPIERTO
+setInterval(() => {
+  console.log('🏓 Ping para mantener servidor activo');
+}, 10 * 60 * 1000);
