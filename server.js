@@ -172,9 +172,6 @@ app.post('/api/inscribir', async (req, res) => {
     console.log(`   Usuario: ${usuario}`);
     console.log(`   Actividad: ${actividad}`);
 
-    // Generar ID único para la inscripción
-    const idInscripcion = `INS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
     const response = await axios({
       url: `https://api.appsheet.com/api/v2/apps/${CONFIG.appId}/tables/Preinscripcion/Action?applicationAccessKey=${CONFIG.accessKey}`,
       method: 'post',
@@ -187,10 +184,8 @@ app.post('/api/inscribir', async (req, res) => {
         },
         "Rows": [
           {
-            "ID Inscripción": idInscripcion,
             "Actividad": actividad,
-            "Usuario": usuario,
-            "Fecha": new Date().toLocaleDateString('en-US')
+            "Usuario": usuario
           }
         ]
       },
@@ -202,17 +197,15 @@ app.post('/api/inscribir', async (req, res) => {
 
     res.json({
       success: true,
-      message: '¡Inscripción exitosa!',
-      inscripcion: {
-        id: idInscripcion,
-        actividad: actividad,
-        usuario: usuario
-      }
+      message: '¡Inscripción exitosa!'
     });
 
   } catch (error) {
     console.error('='.repeat(50));
     console.error(`[${new Date().toISOString()}] ❌ Error en inscripción:`, error.message);
+    if (error.response && error.response.data) {
+      console.error('Detalles del error:', JSON.stringify(error.response.data, null, 2));
+    }
     console.error('='.repeat(50));
     
     res.status(500).json({ 
