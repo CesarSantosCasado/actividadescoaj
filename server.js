@@ -30,6 +30,52 @@ function buildRequest(tabla) {
   };
 }
 
+// NUEVO: Endpoint para login
+app.post('/api/login', async (req, res) => {
+  try {
+    const { alias, contrasena } = req.body;
+
+    const response = await axios({
+      url: `https://api.appsheet.com/api/v2/apps/${CONFIG.appId}/tables/Usuarios/Action?applicationAccessKey=${CONFIG.accessKey}`,
+      method: 'post',
+      headers: { 'Content-Type': 'application/json' },
+      data: {
+        "Action": "Find",
+        "Properties": {
+          "Locale": "es-MX",
+          "Timezone": "Central Standard Time",
+          "Selector": `Filter(Usuarios, [Alias]="${alias}")`
+        },
+        "Rows": []
+      }
+    });
+
+    const usuarios = response.data || [];
+
+    if (usuarios.length === 0) {
+      return res.json({ success: false, message: 'Usuario no encontrado' });
+    }
+
+    const usuario = usuarios[0];
+
+    if (usuario.Contraseña === contrasena) {
+      return res.json({
+        success: true,
+        usuario: {
+          alias: usuario.Alias,
+          nombre: usuario.Usuario || usuario.Alias
+        }
+      });
+    } else {
+      return res.json({ success: false, message: 'Contraseña incorrecta' });
+    }
+
+  } catch (error) {
+    console.error('Error en login:', error);
+    res.status(500).json({ success: false, message: 'Error en el servidor' });
+  }
+});
+
 app.get('/api/datos', async (req, res) => {
   try {
     const [actividadesRes, vigentesRes] = await Promise.all([
