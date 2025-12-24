@@ -160,3 +160,77 @@ app.listen(PORT, () => {
 setInterval(() => {
   console.log('🏓 Ping para mantener servidor activo');
 }, 10 * 60 * 1000);
+
+
+// ENDPOINT DE INSCRIPCIÓN
+app.post('/api/inscribir', async (req, res) => {
+  try {
+    const { actividad, usuario } = req.body;
+    
+    console.log('='.repeat(50));
+    console.log(`[${new Date().toISOString()}] 📝 Inscripción nueva`);
+    console.log(`   Usuario: ${usuario}`);
+    console.log(`   Actividad: ${actividad}`);
+
+    // Generar ID único para la inscripción
+    const idInscripcion = `INS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    const response = await axios({
+      url: `https://api.appsheet.com/api/v2/apps/${CONFIG.appId}/tables/Preinscripcion/Action?applicationAccessKey=${CONFIG.accessKey}`,
+      method: 'post',
+      headers: { 'Content-Type': 'application/json' },
+      data: {
+        "Action": "Add",
+        "Properties": {
+          "Locale": "es-MX",
+          "Timezone": "Central Standard Time"
+        },
+        "Rows": [
+          {
+            "ID Inscripción": idInscripcion,
+            "Actividad": actividad,
+            "Usuario": usuario,
+            "Fecha": new Date().toLocaleDateString('en-US')
+          }
+        ]
+      },
+      timeout: 15000
+    });
+
+    console.log(`[${new Date().toISOString()}] ✅ Inscripción exitosa`);
+    console.log('='.repeat(50));
+
+    res.json({
+      success: true,
+      message: '¡Inscripción exitosa!',
+      inscripcion: {
+        id: idInscripcion,
+        actividad: actividad,
+        usuario: usuario
+      }
+    });
+
+  } catch (error) {
+    console.error('='.repeat(50));
+    console.error(`[${new Date().toISOString()}] ❌ Error en inscripción:`, error.message);
+    console.error('='.repeat(50));
+    
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error al inscribirse. Intenta de nuevo.' 
+    });
+  }
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
