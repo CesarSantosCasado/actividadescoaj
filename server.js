@@ -30,7 +30,6 @@ function buildRequest(tabla) {
   };
 }
 
-// ENDPOINT DE LOGIN OPTIMIZADO - BUSCA SOLO 1 USUARIO
 app.post('/api/login', async (req, res) => {
   try {
     const { alias, contrasena } = req.body;
@@ -38,9 +37,9 @@ app.post('/api/login', async (req, res) => {
     console.log(`[${new Date().toISOString()}] Login intento: ${alias}`);
     const startTime = Date.now();
 
-    // BUSCAR SOLO EL USUARIO ESPECÍFICO (más rápido que traer todos)
+    // BUSCAR EN LA TABLA UsuariosLoginActividades (sin relaciones)
     const response = await axios({
-      url: `https://api.appsheet.com/api/v2/apps/${CONFIG.appId}/tables/Usuarios/Action?applicationAccessKey=${CONFIG.accessKey}`,
+      url: `https://api.appsheet.com/api/v2/apps/${CONFIG.appId}/tables/UsuariosLoginActividades/Action?applicationAccessKey=${CONFIG.accessKey}`,
       method: 'post',
       headers: { 'Content-Type': 'application/json' },
       data: {
@@ -48,11 +47,11 @@ app.post('/api/login', async (req, res) => {
         "Properties": {
           "Locale": "es-MX",
           "Timezone": "Central Standard Time",
-          "Selector": `Filter(Usuarios, [Alias]="${alias}")`  // FILTRO ESPECÍFICO
+          "Selector": `Filter(UsuariosLoginActividades, [Alias]="${alias}")`
         },
         "Rows": []
       },
-      timeout: 8000
+      timeout: 10000
     });
 
     const responseTime = Date.now() - startTime;
@@ -73,7 +72,7 @@ app.post('/api/login', async (req, res) => {
         success: true,
         usuario: {
           alias: usuario.Alias,
-          nombre: usuario.Usuario || usuario.Alias
+          nombre: usuario.Usuario || usuario.Nombre || usuario.Alias
         }
       });
     } else {
