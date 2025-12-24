@@ -30,11 +30,15 @@ function buildRequest(tabla) {
   };
 }
 
-// NUEVO: Endpoint para login
+// ENDPOINT DE LOGIN OPTIMIZADO - BUSCA SOLO 1 USUARIO
 app.post('/api/login', async (req, res) => {
   try {
     const { alias, contrasena } = req.body;
+    
+    console.log(`[${new Date().toISOString()}] Login intento: ${alias}`);
+    const startTime = Date.now();
 
+    // BUSCAR SOLO EL USUARIO ESPECÍFICO (más rápido que traer todos)
     const response = await axios({
       url: `https://api.appsheet.com/api/v2/apps/${CONFIG.appId}/tables/Usuarios/Action?applicationAccessKey=${CONFIG.accessKey}`,
       method: 'post',
@@ -44,21 +48,27 @@ app.post('/api/login', async (req, res) => {
         "Properties": {
           "Locale": "es-MX",
           "Timezone": "Central Standard Time",
-          "Selector": `Filter(Usuarios, [Alias]="${alias}")`
+          "Selector": `Filter(Usuarios, [Alias]="${alias}")`  // FILTRO ESPECÍFICO
         },
         "Rows": []
-      }
+      },
+      timeout: 8000
     });
+
+    const responseTime = Date.now() - startTime;
+    console.log(`[${new Date().toISOString()}] AppSheet respondió en ${responseTime}ms`);
 
     const usuarios = response.data || [];
 
     if (usuarios.length === 0) {
+      console.log(`[${new Date().toISOString()}] Usuario no encontrado: ${alias}`);
       return res.json({ success: false, message: 'Usuario no encontrado' });
     }
 
     const usuario = usuarios[0];
 
     if (usuario.Contraseña === contrasena) {
+      console.log(`[${new Date().toISOString()}] Login exitoso: ${alias} (${responseTime}ms)`);
       return res.json({
         success: true,
         usuario: {
@@ -67,34 +77,18 @@ app.post('/api/login', async (req, res) => {
         }
       });
     } else {
+      console.log(`[${new Date().toISOString()}] Contraseña incorrecta: ${alias}`);
       return res.json({ success: false, message: 'Contraseña incorrecta' });
     }
 
   } catch (error) {
-    console.error('Error en login:', error);
+    console.error(`[${new Date().toISOString()}] Error en login:`, error.message);
+    
+    if (error.code === 'ECONNABORTED') {
+      return res.status(408).json({ success: false, message: 'Tiempo de espera agotado' });
+    }
+    
     res.status(500).json({ success: false, message: 'Error en el servidor' });
-  }
-});
-
-app.get('/api/datos', async (req, res) => {
-  try {
-    const [actividadesRes, vigentesRes] = await Promise.all([
-      axios(buildRequest("ActividadesVigentes")),
-      axios(buildRequest("ActividadVigente"))
-    ]);
-
-    const actividades = actividadesRes.data || [];
-    const actividadVigente = vigentesRes.data || [];
-
-    actividades.sort((a, b) => (a.Actividad || "").localeCompare(b.Actividad || ""));
-
-    res.json({
-      actividades,
-      actividadVigente
-    });
-  } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ error: 'Error al obtener datos' });
   }
 });
 
