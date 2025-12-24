@@ -10,7 +10,12 @@ const CONFIG = {
   accessKey: "V2-0kr7X-HiVCr-XkEZL-LE5qD-Rdl5Z-PDdhL-Ga3v8-B0j2w"
 };
 
-app.use(cors());
+app.use(cors({
+  origin: ['https://cesarsantoscasado.github.io', 'http://localhost:3000', '*'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
+  credentials: true
+}));
 app.use(express.json());
 
 function buildRequest(tabla) {
