@@ -1,8 +1,6 @@
-// server.js
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,7 +12,6 @@ const CONFIG = {
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
 
 function buildRequest(tabla) {
   return {
@@ -55,8 +52,8 @@ app.get('/api/datos', async (req, res) => {
   }
 });
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+app.get('/', (req, res) => {
+  res.json({ message: 'API COAJ Backend funcionando' });
 });
 
 app.listen(PORT, () => {
