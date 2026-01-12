@@ -1,234 +1,176 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const CONFIG = {
   appId: "b6fac65a-32b5-445f-8831-d6f1be2b4433",
-  accessKey: "V2-0kr7X-HiVCr-XkEZL-LE5qD-Rdl5Z-PDdhL-Ga3v8-B0j2w"
+  accessKey: "V2-0kr7X-HiVCr-XkEZL-LE5qD-Rdl5Z-PDdhL-Ga3v8-B0j2w",
+  baseUrl: "https://api.appsheet.com/api/v2/apps"
 };
 
-app.use(cors({
-  origin: ['https://cesarsantoscasado.github.io', 'http://localhost:3000', '*'],
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
-  credentials: true
-}));
+const apiUrl = (tabla) => `${CONFIG.baseUrl}/${CONFIG.appId}/tables/${tabla}/Action?applicationAccessKey=${CONFIG.accessKey}`;
+
+app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Accept'] }));
 app.use(express.json());
 
-function buildRequest(tabla) {
-  return {
-    url: `https://api.appsheet.com/api/v2/apps/${CONFIG.appId}/tables/${tabla}/Action?applicationAccessKey=${CONFIG.accessKey}`,
-    method: 'post',
-    headers: { 'Content-Type': 'application/json' },
-    data: {
-      "Action": "Find",
-      "Properties": {
-        "Locale": "es-MX",
-        "Timezone": "Central Standard Time",
-        "Selector": `Filter(${tabla}, true)`
-      },
-      "Rows": []
-    }
-  };
-}
-
-// ENDPOINT DE LOGIN
+// LOGIN
 app.post('/api/login', async (req, res) => {
+  const { alias, contrasena } = req.body;
+  if (!alias || !contrasena) return res.json({ success: false, message: 'Alias y contraseña requeridos' });
+
   try {
-    const { alias, contrasena } = req.body;
-    
-    console.log('='.repeat(50));
-    console.log(`[${new Date().toISOString()}] 🔐 Login intento: ${alias}`);
-    const startTime = Date.now();
+    const { data } = await axios.post(apiUrl('Usuarios'), {
+      Action: "Find",
+      Properties: { Locale: "es-MX", Selector: `Filter(Usuarios, [Alias]="${alias}")` },
+      Rows: []
+    }, { timeout: 15000 });
 
-    console.log(`[${new Date().toISOString()}] 📡 Consultando AppSheet...`);
-    const response = await axios({
-      url: `https://api.appsheet.com/api/v2/apps/${CONFIG.appId}/tables/UsuariosLoginActividades/Action?applicationAccessKey=${CONFIG.accessKey}`,
-      method: 'post',
-      headers: { 'Content-Type': 'application/json' },
-      data: {
-        "Action": "Find",
-        "Properties": {
-          "Locale": "es-MX",
-          "Timezone": "Central Standard Time",
-          "Selector": `Filter(UsuariosLoginActividades, [Alias]="${alias}")`
-        },
-        "Rows": []
-      },
-      timeout: 30000  // 30 segundos
+    const usuario = (data || [])[0];
+    if (!usuario) return res.json({ success: false, message: 'Usuario no encontrado' });
+    if (usuario.Contraseña !== contrasena) return res.json({ success: false, message: 'Contraseña incorrecta' });
+
+    res.json({
+      success: true,
+      usuario: { alias: usuario.Alias, nombre: usuario.Usuario || usuario.Alias }
     });
-
-    const responseTime = Date.now() - startTime;
-    console.log(`[${new Date().toISOString()}] ✅ AppSheet respondió en ${responseTime}ms`);
-
-    const usuarios = response.data || [];
-    console.log(`[${new Date().toISOString()}] 👥 Usuarios encontrados: ${usuarios.length}`);
-
-    if (usuarios.length === 0) {
-      console.log(`[${new Date().toISOString()}] ❌ Usuario NO encontrado: ${alias}`);
-      console.log('='.repeat(50));
-      return res.json({ success: false, message: 'Usuario no encontrado' });
-    }
-
-    const usuario = usuarios[0];
-    console.log(`[${new Date().toISOString()}] 🔍 Validando contraseña...`);
-
-    if (usuario.Contraseña === contrasena) {
-      console.log(`[${new Date().toISOString()}] ✅ Login EXITOSO: ${alias} (${responseTime}ms)`);
-      console.log('='.repeat(50));
-      return res.json({
-        success: true,
-        usuario: {
-          alias: usuario.Alias,
-          nombre: usuario.Usuario || usuario.Nombre || usuario.Alias
-        }
-      });
-    } else {
-      console.log(`[${new Date().toISOString()}] ❌ Contraseña INCORRECTA: ${alias}`);
-      console.log('='.repeat(50));
-      return res.json({ success: false, message: 'Contraseña incorrecta' });
-    }
-
-  } catch (error) {
-    console.error('='.repeat(50));
-    console.error(`[${new Date().toISOString()}] ❌ ERROR en login:`, error.message);
-    console.error('='.repeat(50));
-    
-    if (error.code === 'ECONNABORTED') {
-      return res.status(408).json({ success: false, message: 'AppSheet tardó demasiado en responder' });
-    }
-    
-    res.status(500).json({ success: false, message: 'Error en el servidor' });
+  } catch (e) {
+    console.error('Login error:', e.message);
+    res.status(500).json({ success: false, message: 'Error del servidor' });
   }
 });
 
-// ENDPOINT DE DATOS
+// REGISTRO
+app.post('/api/registro', async (req, res) => {
+  const { alias, contrasena, usuario, email, fechaNacimiento, sexo, municipio, distrito, direccion, movil } = req.body;
+  
+  if (!alias || !contrasena || !usuario || !email) {
+    return res.json({ success: false, message: 'Alias, contraseña, nombre y email son requeridos' });
+  }
+
+  try {
+    // Verificar si alias existe
+    const { data: existe } = await axios.post(apiUrl('Usuarios'), {
+      Action: "Find",
+      Properties: { Locale: "es-MX", Selector: `Filter(Usuarios, [Alias]="${alias}")` },
+      Rows: []
+    }, { timeout: 15000 });
+
+    if (existe && existe.length > 0) {
+      return res.json({ success: false, message: 'El alias ya está registrado', existe: true });
+    }
+
+    // Crear usuario
+    await axios.post(apiUrl('Usuarios'), {
+      Action: "Add",
+      Properties: { Locale: "es-MX", Timezone: "Central Standard Time" },
+      Rows: [{
+        Alias: alias,
+        Contraseña: contrasena,
+        Usuario: usuario,
+        Email: email,
+        "Fecha de nacimiento": fechaNacimiento || "",
+        Sexo: sexo || "Prefiero no decirlo",
+        Municipio: municipio || "",
+        Distrito: distrito || "",
+        Dirección: direccion || "",
+        Móvil: movil || "",
+        "Centro Juvenil": "COAJ Ouka Leele",
+        Puesto: "Usuario",
+        Autorización: "Y"
+      }]
+    }, { timeout: 15000 });
+
+    res.json({ success: true, message: 'Usuario registrado correctamente' });
+  } catch (e) {
+    console.error('Registro error:', e.message);
+    res.status(500).json({ success: false, message: 'Error al registrar' });
+  }
+});
+
+// VERIFICAR ALIAS
+app.post('/api/verificar-alias', async (req, res) => {
+  const { alias } = req.body;
+  if (!alias) return res.json({ disponible: false });
+
+  try {
+    const { data } = await axios.post(apiUrl('Usuarios'), {
+      Action: "Find",
+      Properties: { Locale: "es-MX", Selector: `Filter(Usuarios, [Alias]="${alias}")` },
+      Rows: []
+    }, { timeout: 10000 });
+
+    res.json({ disponible: !data || data.length === 0 });
+  } catch (e) {
+    res.json({ disponible: false, error: true });
+  }
+});
+
+// DATOS (actividades)
 app.get('/api/datos', async (req, res) => {
   try {
-    console.log(`[${new Date().toISOString()}] Solicitando datos...`);
+    const buildReq = (tabla) => axios.post(apiUrl(tabla), {
+      Action: "Find",
+      Properties: { Locale: "es-MX", Selector: `Filter(${tabla}, true)` },
+      Rows: []
+    }, { timeout: 20000 });
+
+    const [r1, r2] = await Promise.all([buildReq("ActividadesVigentes"), buildReq("ActividadVigente")]);
     
-    const [actividadesRes, vigentesRes] = await Promise.all([
-      axios(buildRequest("ActividadesVigentes")),
-      axios(buildRequest("ActividadVigente"))
-    ]);
-
-    const actividades = actividadesRes.data || [];
-    const actividadVigente = vigentesRes.data || [];
-
-    actividades.sort((a, b) => (a.Actividad || "").localeCompare(b.Actividad || ""));
-
-    console.log(`[${new Date().toISOString()}] Datos enviados: ${actividades.length} actividades`);
-
     res.json({
-      actividades,
-      actividadVigente
+      actividades: (r1.data || []).sort((a, b) => (a.Actividad || "").localeCompare(b.Actividad || "")),
+      actividadVigente: r2.data || []
     });
-  } catch (error) {
-    console.error(`[${new Date().toISOString()}] Error en /api/datos:`, error.message);
+  } catch (e) {
+    console.error('Datos error:', e.message);
     res.status(500).json({ error: 'Error al obtener datos' });
   }
 });
 
-// HEALTH CHECK
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
-});
-
-// RUTA RAÍZ
-app.get('/', (req, res) => {
-  res.json({ 
-    message: 'API COAJ Backend funcionando',
-    endpoints: {
-      login: 'POST /api/login',
-      datos: 'GET /api/datos',
-      health: 'GET /health'
-    }
-  });
-});
-
-app.listen(PORT, () => {
-  console.log(`✅ Servidor en puerto ${PORT}`);
-  console.log(`📍 Endpoints disponibles:`);
-  console.log(`   - POST /api/login`);
-  console.log(`   - GET /api/datos`);
-  console.log(`   - GET /health`);
-});
-
-// MANTENER SERVIDOR DESPIERTO
-setInterval(() => {
-  console.log('🏓 Ping para mantener servidor activo');
-}, 10 * 60 * 1000);
-
-
-// ENDPOINT DE INSCRIPCIÓN
-app.post('/api/inscribir', async (req, res) => {
+// CATALOGOS
+app.get('/api/catalogos', async (req, res) => {
   try {
-    const { actividad, usuario } = req.body;
-    
-    console.log('='.repeat(50));
-    console.log(`[${new Date().toISOString()}] 📝 Inscripción nueva`);
-    console.log(`   Usuario: ${usuario}`);
-    console.log(`   Actividad: ${actividad}`);
+    const buildReq = (tabla) => axios.post(apiUrl(tabla), {
+      Action: "Find",
+      Properties: { Locale: "es-MX" },
+      Rows: []
+    }, { timeout: 15000 });
 
-    const response = await axios({
-      url: `https://api.appsheet.com/api/v2/apps/${CONFIG.appId}/tables/Preinscripcion/Action?applicationAccessKey=${CONFIG.accessKey}`,
-      method: 'post',
-      headers: { 'Content-Type': 'application/json' },
-      data: {
-        "Action": "Add",
-        "Properties": {
-          "Locale": "es-MX",
-          "Timezone": "Central Standard Time"
-        },
-        "Rows": [
-          {
-            "Actividad": actividad,
-            "Usuario": usuario
-          }
-        ]
-      },
-      timeout: 30000
-    });
-
-    console.log(`[${new Date().toISOString()}] ✅ Inscripción exitosa`);
-    console.log('='.repeat(50));
+    const [m, d, b] = await Promise.all([buildReq("Municipios"), buildReq("Distritos"), buildReq("Barrios")]);
 
     res.json({
-      success: true,
-      message: '¡Inscripción exitosa!'
+      municipios: (m.data || []).map(x => ({ id: x.Id, nombre: x.Municipio })),
+      distritos: (d.data || []).map(x => ({ id: x.Id, nombre: x.Distrito })),
+      barrios: (b.data || []).map(x => ({ id: x.Id, nombre: x.Barrio, distrito: x.Distrito }))
     });
-
-  } catch (error) {
-    console.error('='.repeat(50));
-    console.error(`[${new Date().toISOString()}] ❌ Error en inscripción:`, error.message);
-    if (error.response && error.response.data) {
-      console.error('Detalles del error:', JSON.stringify(error.response.data, null, 2));
-    }
-    console.error('='.repeat(50));
-    
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error al inscribirse. Intenta de nuevo.' 
-    });
+  } catch (e) {
+    console.error('Catalogos error:', e.message);
+    res.status(500).json({ error: 'Error al obtener catálogos' });
   }
 });
 
+// INSCRIPCIÓN
+app.post('/api/inscribir', async (req, res) => {
+  const { actividad, usuario } = req.body;
+  if (!actividad || !usuario) return res.json({ success: false, message: 'Datos incompletos' });
 
+  try {
+    await axios.post(apiUrl('Preinscripcion'), {
+      Action: "Add",
+      Properties: { Locale: "es-MX", Timezone: "Central Standard Time" },
+      Rows: [{ Actividad: actividad, Usuario: usuario }]
+    }, { timeout: 15000 });
 
+    res.json({ success: true, message: 'Inscripción exitosa' });
+  } catch (e) {
+    console.error('Inscripcion error:', e.message);
+    res.status(500).json({ success: false, message: 'Error al inscribirse' });
+  }
+});
 
+// HEALTH
+app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+app.get('/', (req, res) => res.json({ message: 'API COAJ activa', endpoints: ['POST /api/login', 'POST /api/registro', 'GET /api/datos', 'GET /api/catalogos'] }));
 
-
-
-
-
-
-
-
-
+app.listen(PORT, () => console.log(`✅ Servidor en puerto ${PORT}`));
