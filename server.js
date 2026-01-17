@@ -143,4 +143,16 @@ app.get('/api/warmup', (req, res) => res.json({ status: 'warm', ts: Date.now() }
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.get('/', (req, res) => res.json({ api: 'COAJ', status: 'activa' }));
 
+
+// EVENTOS
+app.get('/api/eventos', async (req, res) => {
+  try {
+    const eventos = await appsheet('Eventos', 'Find', 'Filter(Eventos, true)');
+    res.json({ eventos: eventos || [] });
+  } catch (e) {
+    res.status(500).json({ error: 'Error al obtener eventos', eventos: [] });
+  }
+});
+
+
 app.listen(PORT, () => console.log(`✅ Puerto ${PORT}`));
