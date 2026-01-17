@@ -15,29 +15,47 @@ const apiUrl = (tabla) => `${CONFIG.baseUrl}/${CONFIG.appId}/tables/${tabla}/Act
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Accept'] }));
 app.use(express.json());
 
+// TIMEOUT MÁS LARGO (30 segundos)
+const TIMEOUT = 30000;
+
 // LOGIN
 app.post('/api/login', async (req, res) => {
   const { alias, contrasena } = req.body;
   if (!alias || !contrasena) return res.json({ success: false, message: 'Alias y contraseña requeridos' });
+
+  console.log(`[LOGIN] Intentando login para: ${alias}`);
+  const startTime = Date.now();
 
   try {
     const { data } = await axios.post(apiUrl('Usuarios'), {
       Action: "Find",
       Properties: { Locale: "es-MX", Selector: `Filter(Usuarios, [Alias]="${alias}")` },
       Rows: []
-    }, { timeout: 15000 });
+    }, { timeout: TIMEOUT });
+
+    console.log(`[LOGIN] Respuesta AppSheet en ${Date.now() - startTime}ms`);
 
     const usuario = (data || [])[0];
     if (!usuario) return res.json({ success: false, message: 'Usuario no encontrado' });
     if (usuario.Contraseña !== contrasena) return res.json({ success: false, message: 'Contraseña incorrecta' });
+    
+    // Verificar sanciones
+    if (usuario['Sanciones:'] === 'TRUE' || usuario['Sanciones:'] === true) {
+      return res.json({ success: false, message: 'Usuario bloqueado por sanciones' });
+    }
 
     res.json({
       success: true,
-      usuario: { alias: usuario.Alias, nombre: usuario.Usuario || usuario.Alias }
+      usuario: { 
+        alias: usuario.Alias, 
+        nombre: usuario.Usuario || usuario.Alias,
+        email: usuario.Email || '',
+        centro: usuario['Centro Juvenil'] || ''
+      }
     });
   } catch (e) {
-    console.error('Login error:', e.message);
-    res.status(500).json({ success: false, message: 'Error del servidor' });
+    console.error(`[LOGIN] Error después de ${Date.now() - startTime}ms:`, e.message);
+    res.status(500).json({ success: false, message: 'Error del servidor. Intenta de nuevo.' });
   }
 });
 
@@ -49,13 +67,15 @@ app.post('/api/registro', async (req, res) => {
     return res.json({ success: false, message: 'Alias, contraseña, nombre y email son requeridos' });
   }
 
+  console.log(`[REGISTRO] Intentando registro para: ${alias}`);
+
   try {
     // Verificar si alias existe
     const { data: existe } = await axios.post(apiUrl('Usuarios'), {
       Action: "Find",
       Properties: { Locale: "es-MX", Selector: `Filter(Usuarios, [Alias]="${alias}")` },
       Rows: []
-    }, { timeout: 15000 });
+    }, { timeout: TIMEOUT });
 
     if (existe && existe.length > 0) {
       return res.json({ success: false, message: 'El alias ya está registrado', existe: true });
@@ -78,13 +98,15 @@ app.post('/api/registro', async (req, res) => {
         Móvil: movil || "",
         "Centro Juvenil": "COAJ Ouka Leele",
         Puesto: "Usuario",
-        Autorización: "Y"
+        Autorización: "Y",
+        "Sanciones:": "FALSE"
       }]
-    }, { timeout: 15000 });
+    }, { timeout: TIMEOUT });
 
+    console.log(`[REGISTRO] Usuario ${alias} creado correctamente`);
     res.json({ success: true, message: 'Usuario registrado correctamente' });
   } catch (e) {
-    console.error('Registro error:', e.message);
+    console.error('[REGISTRO] Error:', e.message);
     res.status(500).json({ success: false, message: 'Error al registrar' });
   }
 });
@@ -99,7 +121,7 @@ app.post('/api/verificar-alias', async (req, res) => {
       Action: "Find",
       Properties: { Locale: "es-MX", Selector: `Filter(Usuarios, [Alias]="${alias}")` },
       Rows: []
-    }, { timeout: 10000 });
+    }, { timeout: TIMEOUT });
 
     res.json({ disponible: !data || data.length === 0 });
   } catch (e) {
@@ -109,12 +131,13 @@ app.post('/api/verificar-alias', async (req, res) => {
 
 // DATOS (actividades)
 app.get('/api/datos', async (req, res) => {
+  console.log('[DATOS] Cargando actividades...');
   try {
     const buildReq = (tabla) => axios.post(apiUrl(tabla), {
       Action: "Find",
       Properties: { Locale: "es-MX", Selector: `Filter(${tabla}, true)` },
       Rows: []
-    }, { timeout: 20000 });
+    }, { timeout: TIMEOUT });
 
     const [r1, r2] = await Promise.all([buildReq("ActividadesVigentes"), buildReq("ActividadVigente")]);
     
@@ -123,7 +146,7 @@ app.get('/api/datos', async (req, res) => {
       actividadVigente: r2.data || []
     });
   } catch (e) {
-    console.error('Datos error:', e.message);
+    console.error('[DATOS] Error:', e.message);
     res.status(500).json({ error: 'Error al obtener datos' });
   }
 });
@@ -135,7 +158,7 @@ app.get('/api/catalogos', async (req, res) => {
       Action: "Find",
       Properties: { Locale: "es-MX" },
       Rows: []
-    }, { timeout: 15000 });
+    }, { timeout: TIMEOUT });
 
     const [m, d, b] = await Promise.all([buildReq("Municipios"), buildReq("Distritos"), buildReq("Barrios")]);
 
@@ -145,7 +168,7 @@ app.get('/api/catalogos', async (req, res) => {
       barrios: (b.data || []).map(x => ({ id: x.Id, nombre: x.Barrio, distrito: x.Distrito }))
     });
   } catch (e) {
-    console.error('Catalogos error:', e.message);
+    console.error('[CATALOGOS] Error:', e.message);
     res.status(500).json({ error: 'Error al obtener catálogos' });
   }
 });
@@ -160,13 +183,18 @@ app.post('/api/inscribir', async (req, res) => {
       Action: "Add",
       Properties: { Locale: "es-MX", Timezone: "Central Standard Time" },
       Rows: [{ Actividad: actividad, Usuario: usuario }]
-    }, { timeout: 15000 });
+    }, { timeout: TIMEOUT });
 
     res.json({ success: true, message: 'Inscripción exitosa' });
   } catch (e) {
-    console.error('Inscripcion error:', e.message);
+    console.error('[INSCRIPCION] Error:', e.message);
     res.status(500).json({ success: false, message: 'Error al inscribirse' });
   }
+});
+
+// WARMUP - Para mantener el dyno activo
+app.get('/api/warmup', (req, res) => {
+  res.json({ status: 'warm', timestamp: new Date().toISOString() });
 });
 
 // HEALTH
