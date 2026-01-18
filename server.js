@@ -3,7 +3,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // URLs
-const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxJOfYIGXEkM-CwdwhV9k7PB-tdSM2LE3zajoUxOiZSjIBb3WWer-ze8iYiDFewOElkMg/exec";
+const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxSgNVZou0wYkiY8XlehafsU_ge6kpwNjRSVQyEPvdCwiC1tdxR-MBEj4-EVnsz5Zg4sQ/exec";
 
 const CONFIG = {
   appId: "b6fac65a-32b5-445f-8831-d6f1be2b4433",
