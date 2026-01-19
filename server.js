@@ -116,6 +116,20 @@ app.get('/api/centros', async (req, res) => {
 });
 
 // DATOS
+// ORDEN DE DÍAS
+const ordenDias = {
+  'lunes': 1, 'martes': 2, 'miércoles': 3, 'miercoles': 3,
+  'jueves': 4, 'viernes': 5, 'sábado': 6, 'sabado': 6, 'domingo': 7
+};
+
+function obtenerOrdenDia(diasStr) {
+  if (!diasStr) return 99;
+  const dias = diasStr.toLowerCase().split(/[,\s]+/).filter(d => d.trim());
+  const ordenes = dias.map(d => ordenDias[d.trim()] || 99);
+  return Math.min(...ordenes);
+}
+
+// DATOS - CON ORDENAMIENTO POR DÍA
 app.get('/api/datos', async (req, res) => {
   try {
     const [actividades, actividadVigente] = await Promise.all([
@@ -123,8 +137,15 @@ app.get('/api/datos', async (req, res) => {
       appsheet('ActividadVigente', 'Find', 'Filter(ActividadVigente, true)')
     ]);
     
+    const actividadesOrdenadas = (actividades || []).sort((a, b) => {
+      const diaA = obtenerOrdenDia(a["Días"]);
+      const diaB = obtenerOrdenDia(b["Días"]);
+      if (diaA !== diaB) return diaA - diaB;
+      return (a.Actividad || "").localeCompare(b.Actividad || "");
+    });
+    
     res.json({
-      actividades: (actividades || []).sort((a, b) => (a.Actividad || "").localeCompare(b.Actividad || "")),
+      actividades: actividadesOrdenadas,
       actividadVigente: actividadVigente || []
     });
   } catch (e) {
