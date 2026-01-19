@@ -16,7 +16,7 @@ const apiUrl = (tabla) => `${CONFIG.baseUrl}/${CONFIG.appId}/tables/${tabla}/Act
 app.use(require('cors')());
 app.use(express.json());
 
-// Fetch helper para AppSheet (sigue igual)
+// Fetch helper para AppSheet
 const appsheet = async (tabla, action, selector = null, rows = []) => {
   const body = { Action: action, Properties: { Locale: "es-MX" }, Rows: rows };
   if (selector) body.Properties.Selector = selector;
@@ -30,7 +30,7 @@ const appsheet = async (tabla, action, selector = null, rows = []) => {
   return res.json();
 };
 
-// LOGIN - AHORA USA WEB APP (RÁPIDO)
+// LOGIN - USA WEB APP
 app.post('/api/login', async (req, res) => {
   const { alias, contrasena } = req.body;
   if (!alias || !contrasena) return res.json({ success: false, message: 'Alias y contraseña requeridos' });
@@ -48,7 +48,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// VERIFICAR ALIAS - AHORA USA WEB APP (RÁPIDO)
+// VERIFICAR ALIAS - USA WEB APP
 app.post('/api/verificar-alias', async (req, res) => {
   const { alias } = req.body;
   if (!alias) return res.json({ disponible: false });
@@ -66,9 +66,9 @@ app.post('/api/verificar-alias', async (req, res) => {
   }
 });
 
-// REGISTRO - SIGUE CON APPSHEET
+// REGISTRO - CON CENTRO JUVENIL
 app.post('/api/registro', async (req, res) => {
-  const { alias, contrasena, usuario, email, fechaNacimiento, sexo, municipio, distrito, direccion, movil } = req.body;
+  const { alias, contrasena, usuario, email, fechaNacimiento, sexo, municipio, distrito, direccion, movil, centroJuvenil } = req.body;
   if (!alias || !contrasena || !usuario || !email) {
     return res.json({ success: false, message: 'Alias, contraseña, nombre y email son requeridos' });
   }
@@ -78,11 +78,20 @@ app.post('/api/registro', async (req, res) => {
     if (existe?.length > 0) return res.json({ success: false, message: 'El alias ya está registrado', existe: true });
 
     await appsheet('Usuarios', 'Add', null, [{
-      Alias: alias, Contraseña: contrasena, Usuario: usuario, Email: email,
-      "Fecha de nacimiento": fechaNacimiento || "", Sexo: sexo || "Prefiero no decirlo",
-      Municipio: municipio || "", Distrito: distrito || "", Dirección: direccion || "",
-      Móvil: movil || "", "Centro Juvenil": "COAJ Ouka Leele", Puesto: "Usuario",
-      Autorización: "Y", "Sanciones:": "FALSE"
+      Alias: alias, 
+      Contraseña: contrasena, 
+      Usuario: usuario, 
+      Email: email,
+      "Fecha de nacimiento": fechaNacimiento || "", 
+      Sexo: sexo || "Prefiero no decirlo",
+      Municipio: municipio || "", 
+      Distrito: distrito || "", 
+      Dirección: direccion || "",
+      Móvil: movil || "", 
+      "Centro Juvenil": centroJuvenil || "", 
+      Puesto: "Usuario",
+      Autorización: "Y", 
+      "Sanciones:": "FALSE"
     }]);
 
     res.json({ success: true, message: 'Usuario registrado correctamente' });
@@ -91,7 +100,22 @@ app.post('/api/registro', async (req, res) => {
   }
 });
 
-// DATOS - SIGUE IGUAL
+// CENTROS JUVENILES
+app.get('/api/centros', async (req, res) => {
+  try {
+    const centros = await appsheet('Centros Juveniles', 'Find');
+    res.json({ 
+      centros: (centros || []).map(x => ({ 
+        id: x.Id || x["Row ID"], 
+        nombre: x["Centro Juvenil"] || x.Nombre 
+      })) 
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Error', centros: [] });
+  }
+});
+
+// DATOS
 app.get('/api/datos', async (req, res) => {
   try {
     const [actividades, actividadVigente] = await Promise.all([
@@ -108,7 +132,7 @@ app.get('/api/datos', async (req, res) => {
   }
 });
 
-// CATALOGOS - SIGUE IGUAL
+// CATALOGOS
 app.get('/api/catalogos', async (req, res) => {
   try {
     const [m, d, b] = await Promise.all([
@@ -127,7 +151,7 @@ app.get('/api/catalogos', async (req, res) => {
   }
 });
 
-// INSCRIPCIÓN - SIGUE IGUAL
+// INSCRIPCIÓN
 app.post('/api/inscribir', async (req, res) => {
   const { actividad, usuario } = req.body;
   if (!actividad || !usuario) return res.json({ success: false, message: 'Datos incompletos' });
@@ -140,7 +164,7 @@ app.post('/api/inscribir', async (req, res) => {
   }
 });
 
-// EVENTOS - SIGUE IGUAL
+// EVENTOS
 app.get('/api/eventos', async (req, res) => {
   try {
     const eventos = await appsheet('Eventos', 'Find', 'Filter(Eventos, true)');
@@ -150,6 +174,7 @@ app.get('/api/eventos', async (req, res) => {
   }
 });
 
+// EXPOSICIONES
 app.get('/api/exposiciones', async (req, res) => {
   try {
     const exposiciones = await appsheet('EstadoExposicionesActivas', 'Find', 'Filter(EstadoExposicionesActivas, true)');
@@ -159,8 +184,7 @@ app.get('/api/exposiciones', async (req, res) => {
   }
 });
 
-
-// WARMUP & HEALTH - SIGUE IGUAL
+// WARMUP & HEALTH
 app.get('/api/warmup', (req, res) => res.json({ status: 'warm', ts: Date.now() }));
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.get('/', (req, res) => res.json({ api: 'COAJ', status: 'activa' }));
