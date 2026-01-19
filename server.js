@@ -150,6 +150,16 @@ app.get('/api/eventos', async (req, res) => {
   }
 });
 
+app.get('/api/exposiciones', async (req, res) => {
+  try {
+    const exposiciones = await appsheet('EstadoExposicionesActivas', 'Find', 'Filter(EstadoExposicionesActivas, true)');
+    res.json({ exposiciones: exposiciones || [] });
+  } catch (e) {
+    res.status(500).json({ error: 'Error al obtener exposiciones', exposiciones: [] });
+  }
+});
+
+
 // WARMUP & HEALTH - SIGUE IGUAL
 app.get('/api/warmup', (req, res) => res.json({ status: 'warm', ts: Date.now() }));
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
