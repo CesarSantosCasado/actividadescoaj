@@ -185,6 +185,30 @@ app.post('/api/inscribir', async (req, res) => {
   }
 });
 
+// OLVIDÉ MI CONTRASEÑA
+app.post('/api/olvide-contrasena', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.json({ success: false, message: 'Email requerido' });
+
+  try {
+    // Buscar usuario por email
+    const usuarios = await appsheet('Usuarios', 'Find', `Filter(Usuarios, [Email]="${email}")`);
+    
+    if (!usuarios || usuarios.length === 0) {
+      return res.json({ success: false, message: 'No encontramos una cuenta con ese correo' });
+    }
+
+    const usuario = usuarios[0];
+    
+    // Agregar a OlvideMiContraseña
+    await appsheet('OlvideMiContraseña', 'Add', null, [{ Usuario: usuario.Alias }]);
+    
+    res.json({ success: true, message: 'Te enviaremos tu contraseña por correo' });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Error al procesar solicitud' });
+  }
+});
+
 // EVENTOS
 app.get('/api/eventos', async (req, res) => {
   try {
