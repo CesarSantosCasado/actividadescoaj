@@ -174,11 +174,11 @@ app.get('/api/catalogos', async (req, res) => {
 
 // INSCRIPCIÓN
 app.post('/api/inscribir', async (req, res) => {
-  const { actividad, usuario } = req.body;
-  if (!actividad || !usuario) return res.json({ success: false, message: 'Datos incompletos' });
+  const { actividadId, usuario } = req.body;
+  if (!actividadId || !usuario) return res.json({ success: false, message: 'Datos incompletos' });
 
   try {
-    await appsheet('Preinscripcion', 'Add', null, [{ Actividad: actividad, Usuario: usuario }]);
+    await appsheet('Preinscripcion', 'Add', null, [{ Actividad: actividadId, Usuario: usuario }]);
     res.json({ success: true, message: 'Inscripción exitosa' });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Error al inscribirse' });
