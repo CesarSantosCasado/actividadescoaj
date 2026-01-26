@@ -3,7 +3,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // URLs
-const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxk7JZywLmy7l6luUOqrZSPfaeAmOEHhJydfODqaVGjL7f28hhsCGhGEMEWqYEMAAOxBw/exec";
+const WEBAPP_URL = "https://script.google.com/macros/s/AKfycby4I3kZ-v3D5kzJaBTkMILO_aNRTvAQGlBR1oI_5IzWMFu5OenRHFbSWBB9E8RkgBZqOw/exec";
 
 const CONFIG = {
   appId: "b6fac65a-32b5-445f-8831-d6f1be2b4433",
@@ -171,7 +171,7 @@ app.get('/api/catalogos', async (req, res) => {
   }
 });
 
-// INSCRIPCIÓN - USA DATOS DEL FRONTEND (sin consulta extra a AppSheet)
+// INSCRIPCIÓN - CON VALIDACIONES VIA WEB APP (rápido)
 app.post('/api/inscribir', async (req, res) => {
   const { actividadId, usuario, fechaNacimiento, sancion } = req.body;
   if (!actividadId || !usuario) return res.json({ success: false, message: 'Datos incompletos' });
@@ -206,6 +206,18 @@ app.post('/api/inscribir', async (req, res) => {
           return res.json({ success: false, message: 'COAJ está dirigido a jóvenes de 14 a 30 años.' });
         }
       }
+    }
+
+    // Verificar si ya está inscrito (rápido via Web App)
+    const verificar = await fetch(WEBAPP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'verificar-inscripcion', actividadId, usuario })
+    });
+    const check = await verificar.json();
+    
+    if (check.yaInscrito) {
+      return res.json({ success: false, message: 'Ya estás inscrito en esta actividad.' });
     }
 
     await appsheet('Preinscripcion', 'Add', null, [{ Actividad: actividadId, Usuario: usuario }]);
