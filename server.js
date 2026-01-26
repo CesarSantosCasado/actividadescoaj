@@ -185,10 +185,28 @@ app.post('/api/inscribir', async (req, res) => {
     }
 
     const user = usuarios[0];
-    const sancion = (user["Sanciones:"] || user.Sanciones || "").toString().toUpperCase();
     
+    // Validar sanción
+    const sancion = (user["Sanciones:"] || user.Sanciones || "").toString().toUpperCase();
     if (sancion === "TRUE" || sancion === "Y" || sancion === "1") {
       return res.json({ success: false, message: 'No puedes inscribirte debido a una sanción activa. Contacta con tu centro juvenil.' });
+    }
+
+    // Validar edad (14-30 años)
+    const fechaNac = user["Fecha de nacimiento"] || user.FechaNacimiento;
+    if (fechaNac) {
+      const hoy = new Date();
+      const nac = new Date(fechaNac);
+      let edad = hoy.getFullYear() - nac.getFullYear();
+      const mes = hoy.getMonth() - nac.getMonth();
+      if (mes < 0 || (mes === 0 && hoy.getDate() < nac.getDate())) edad--;
+      
+      if (edad < 14) {
+        return res.json({ success: false, message: 'Debes tener al menos 14 años para inscribirte.' });
+      }
+      if (edad > 30) {
+        return res.json({ success: false, message: 'COAJ está dirigido a jóvenes de 14 a 30 años.' });
+      }
     }
 
     await appsheet('Preinscripcion', 'Add', null, [{ Actividad: actividadId, Usuario: usuario }]);
