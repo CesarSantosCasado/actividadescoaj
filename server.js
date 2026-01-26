@@ -115,7 +115,6 @@ app.get('/api/centros', async (req, res) => {
   }
 });
 
-// DATOS
 // ORDEN DE DÍAS
 const ordenDias = {
   'lunes': 1, 'martes': 2, 'miércoles': 3, 'miercoles': 3,
@@ -172,40 +171,40 @@ app.get('/api/catalogos', async (req, res) => {
   }
 });
 
-// INSCRIPCIÓN
+// INSCRIPCIÓN - USA DATOS DEL FRONTEND (sin consulta extra a AppSheet)
 app.post('/api/inscribir', async (req, res) => {
-  const { actividadId, usuario } = req.body;
+  const { actividadId, usuario, fechaNacimiento, sancion } = req.body;
   if (!actividadId || !usuario) return res.json({ success: false, message: 'Datos incompletos' });
 
   try {
-    const usuarios = await appsheet('Usuarios', 'Find', `Filter(Usuarios, [Alias]="${usuario}")`);
-    
-    if (!usuarios || usuarios.length === 0) {
-      return res.json({ success: false, message: 'Usuario no encontrado' });
-    }
-
-    const user = usuarios[0];
-    
     // Validar sanción
-    const sancion = (user["Sanciones:"] || user.Sanciones || "").toString().toUpperCase();
-    if (sancion === "TRUE" || sancion === "Y" || sancion === "1") {
+    const sancionStr = (sancion || "").toString().toUpperCase();
+    if (sancionStr === "TRUE" || sancionStr === "Y" || sancionStr === "1") {
       return res.json({ success: false, message: 'No puedes inscribirte debido a una sanción activa. Contacta con tu centro juvenil.' });
     }
 
     // Validar edad (14-30 años)
-    const fechaNac = user["Fecha de nacimiento"] || user.FechaNacimiento;
-    if (fechaNac) {
-      const hoy = new Date();
-      const nac = new Date(fechaNac);
-      let edad = hoy.getFullYear() - nac.getFullYear();
-      const mes = hoy.getMonth() - nac.getMonth();
-      if (mes < 0 || (mes === 0 && hoy.getDate() < nac.getDate())) edad--;
-      
-      if (edad < 14) {
-        return res.json({ success: false, message: 'Debes tener al menos 14 años para inscribirte.' });
+    if (fechaNacimiento) {
+      let nac;
+      if (typeof fechaNacimiento === 'string' && fechaNacimiento.includes('/')) {
+        const p = fechaNacimiento.split(' ')[0].split('/');
+        nac = new Date(+p[2], +p[0] - 1, +p[1]);
+      } else {
+        nac = new Date(fechaNacimiento);
       }
-      if (edad > 30) {
-        return res.json({ success: false, message: 'COAJ está dirigido a jóvenes de 14 a 30 años.' });
+      
+      if (!isNaN(nac)) {
+        const hoy = new Date();
+        let edad = hoy.getFullYear() - nac.getFullYear();
+        const mes = hoy.getMonth() - nac.getMonth();
+        if (mes < 0 || (mes === 0 && hoy.getDate() < nac.getDate())) edad--;
+        
+        if (edad < 14) {
+          return res.json({ success: false, message: 'Debes tener al menos 14 años para inscribirte.' });
+        }
+        if (edad > 30) {
+          return res.json({ success: false, message: 'COAJ está dirigido a jóvenes de 14 a 30 años.' });
+        }
       }
     }
 
@@ -222,7 +221,6 @@ app.post('/api/olvide-contrasena', async (req, res) => {
   if (!email) return res.json({ success: false, message: 'Email requerido' });
 
   try {
-    // Buscar usuario por email
     const usuarios = await appsheet('Usuarios', 'Find', `Filter(Usuarios, [Email]="${email}")`);
     
     if (!usuarios || usuarios.length === 0) {
@@ -230,8 +228,6 @@ app.post('/api/olvide-contrasena', async (req, res) => {
     }
 
     const usuario = usuarios[0];
-    
-    // Agregar a OlvideMiContraseña
     await appsheet('OlvideMiContraseña', 'Add', null, [{ Usuario: usuario.Alias }]);
     
     res.json({ success: true, message: 'Te enviaremos tu contraseña por correo' });
