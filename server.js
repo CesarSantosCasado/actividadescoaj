@@ -178,6 +178,19 @@ app.post('/api/inscribir', async (req, res) => {
   if (!actividadId || !usuario) return res.json({ success: false, message: 'Datos incompletos' });
 
   try {
+    const usuarios = await appsheet('Usuarios', 'Find', `Filter(Usuarios, [Alias]="${usuario}")`);
+    
+    if (!usuarios || usuarios.length === 0) {
+      return res.json({ success: false, message: 'Usuario no encontrado' });
+    }
+
+    const user = usuarios[0];
+    const sancion = (user["Sanciones:"] || user.Sanciones || "").toString().toUpperCase();
+    
+    if (sancion === "TRUE" || sancion === "Y" || sancion === "1") {
+      return res.json({ success: false, message: 'No puedes inscribirte debido a una sanción activa. Contacta con tu centro juvenil.' });
+    }
+
     await appsheet('Preinscripcion', 'Add', null, [{ Actividad: actividadId, Usuario: usuario }]);
     res.json({ success: true, message: 'Inscripción exitosa' });
   } catch (e) {
