@@ -282,19 +282,8 @@ app.post('/api/actualizar-foto', async (req, res) => {
   }
 
   try {
-    // Buscar usuario
-    const usuarios = await appsheet('Usuarios', 'Find', `Filter(Usuarios, [Alias]="${alias}")`);
-    
-    if (!usuarios || usuarios.length === 0) {
-      return res.json({ success: false, message: 'Usuario no encontrado' });
-    }
-
-    const usuario = usuarios[0];
-    const rowId = usuario["Row ID"] || usuario.Id || usuario._RowNumber;
-
-    // Actualizar campo Foto
     await appsheet('Usuarios', 'Edit', null, [{
-      "Row ID": rowId,
+      "Alias": alias,
       "Foto": fotoUrl
     }]);
 
