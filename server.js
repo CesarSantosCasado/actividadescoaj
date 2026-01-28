@@ -273,4 +273,36 @@ app.get('/api/warmup', (req, res) => res.json({ status: 'warm', ts: Date.now() }
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.get('/', (req, res) => res.json({ api: 'COAJ', status: 'activa' }));
 
+// ACTUALIZAR DNI/FOTO
+app.post('/api/actualizar-foto', async (req, res) => {
+  const { alias, fotoUrl } = req.body;
+  
+  if (!alias || !fotoUrl) {
+    return res.json({ success: false, message: 'Datos incompletos' });
+  }
+
+  try {
+    // Buscar usuario
+    const usuarios = await appsheet('Usuarios', 'Find', `Filter(Usuarios, [Alias]="${alias}")`);
+    
+    if (!usuarios || usuarios.length === 0) {
+      return res.json({ success: false, message: 'Usuario no encontrado' });
+    }
+
+    const usuario = usuarios[0];
+    const rowId = usuario["Row ID"] || usuario.Id || usuario._RowNumber;
+
+    // Actualizar campo Foto
+    await appsheet('Usuarios', 'Edit', null, [{
+      "Row ID": rowId,
+      "Foto": fotoUrl
+    }]);
+
+    res.json({ success: true, message: 'DNI actualizado correctamente' });
+  } catch (e) {
+    console.error('Error actualizando foto:', e);
+    res.status(500).json({ success: false, message: 'Error al actualizar' });
+  }
+});
+
 app.listen(PORT, () => console.log(`✅ Puerto ${PORT}`));
