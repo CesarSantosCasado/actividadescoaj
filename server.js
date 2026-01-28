@@ -3,7 +3,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // URLs
-const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxWsE0ZQCiEbqxbEzorgNxTowTnmTiJXmTHs977pEdt0vWrwu60MZgUeQhAOZFAuIxBIg/exec";
+const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwE3_Ss2BDhoFyYNKQ87495uAKF4mY0pg2zEc32wJ8MFpca35FwRVpW7S5tpkBy0huuCQ/exec";
 
 const CONFIG = {
   appId: "b6fac65a-32b5-445f-8831-d6f1be2b4433",
@@ -171,19 +171,17 @@ app.get('/api/catalogos', async (req, res) => {
   }
 });
 
-// INSCRIPCIÓN - CON VALIDACIONES VIA WEB APP (rápido)
+// INSCRIPCIÓN - CON VALIDACIONES VIA WEB APP
 app.post('/api/inscribir', async (req, res) => {
   const { actividadId, usuario, fechaNacimiento, sancion } = req.body;
   if (!actividadId || !usuario) return res.json({ success: false, message: 'Datos incompletos' });
 
   try {
-    // Validar sanción
     const sancionStr = (sancion || "").toString().toUpperCase();
     if (sancionStr === "TRUE" || sancionStr === "Y" || sancionStr === "1") {
       return res.json({ success: false, message: 'No puedes inscribirte debido a una sanción activa. Contacta con tu centro juvenil.' });
     }
 
-    // Validar edad (14-30 años)
     if (fechaNacimiento) {
       let nac;
       if (typeof fechaNacimiento === 'string' && fechaNacimiento.includes('/')) {
@@ -208,7 +206,6 @@ app.post('/api/inscribir', async (req, res) => {
       }
     }
 
-    // Verificar si ya está inscrito (rápido via Web App)
     const verificar = await fetch(WEBAPP_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -268,12 +265,7 @@ app.get('/api/exposiciones', async (req, res) => {
   }
 });
 
-// WARMUP & HEALTH
-app.get('/api/warmup', (req, res) => res.json({ status: 'warm', ts: Date.now() }));
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
-app.get('/', (req, res) => res.json({ api: 'COAJ', status: 'activa' }));
-
-// ACTUALIZAR DNI/FOTO
+// ACTUALIZAR DNI/FOTO - USA WEB APP
 app.post('/api/actualizar-foto', async (req, res) => {
   const { alias, fotoUrl } = req.body;
   
@@ -282,16 +274,22 @@ app.post('/api/actualizar-foto', async (req, res) => {
   }
 
   try {
-    await appsheet('Usuarios', 'Edit', null, [{
-      "Alias": alias,
-      "Foto": fotoUrl
-    }]);
-
-    res.json({ success: true, message: 'DNI actualizado correctamente' });
+    const response = await fetch(WEBAPP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'actualizar-foto', alias, fotoUrl })
+    });
+    const data = await response.json();
+    res.json(data);
   } catch (e) {
     console.error('Error actualizando foto:', e);
     res.status(500).json({ success: false, message: 'Error al actualizar' });
   }
 });
+
+// WARMUP & HEALTH
+app.get('/api/warmup', (req, res) => res.json({ status: 'warm', ts: Date.now() }));
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+app.get('/', (req, res) => res.json({ api: 'COAJ', status: 'activa' }));
 
 app.listen(PORT, () => console.log(`✅ Puerto ${PORT}`));
