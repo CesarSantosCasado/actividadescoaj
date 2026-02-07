@@ -430,7 +430,102 @@ app.post('/api/actualizar-foto', async (req, res) => {
     res.status(500).json({ success: false, message: 'Error al actualizar' });
   }
 });
+// DISPONIBILIDAD - BASADA EN CESIONES
+app.get('/api/disponibilidad/:salaNombre/:fecha', async (req, res) => {
+  const { salaNombre, fecha } = req.params;
+  try {
+    console.log(`🔍 Consultando disponibilidad: ${salaNombre} - ${fecha}`);
+    
+    // Obtener cesiones para esa sala y fecha
+    const cesiones = await appsheet('Cesiones', 'Find', 
+      `Filter(Cesiones, AND([Sala]="${salaNombre}", [Fecha]="${fecha}"))`);
+    
+    const horasOcupadas = [];
+    
+    (cesiones || []).forEach(cesion => {
+      const inicio = cesion['Hora de inicio'];
+      const fin = cesion['Hora de finalización'];
+      
+      if (inicio && fin) {
+        // Convertir a formato HH:MM
+        const horaInicio = inicio.substring(0, 5);
+        const horaFin = fin.substring(0, 5);
+        horasOcupadas.push({ inicio: horaInicio, fin: horaFin });
+      }
+    });
+    
+    console.log(`📅 ${horasOcupadas.length} ocupaciones encontradas`);
+    res.json({ horasOcupadas });
+  } catch (e) {
+    console.error('Error disponibilidad:', e);
+    res.status(500).json({ error: 'Error disponibilidad', horasOcupadas: [] });
+  }
+});
 
+// RESERVAR - CREAR CESIÓN  
+app.post('/api/reservar', async (req, res) => {
+  const { salaId, salaNombre, centro, fecha, hora, usuario } = req.body;
+  if (!salaNombre || !fecha || !hora || !usuario) {
+    return res.json({ success: false, message: 'Datos incompletos' });
+  }
+
+  try {
+    console.log(`🎯 Reservando: ${salaNombre} - ${fecha} ${hora} - ${usuario}`);
+    
+    // Verificar disponibilidad
+    const cesiones = await appsheet('Cesiones', 'Find', 
+      `Filter(Cesiones, AND([Sala]="${salaNombre}", [Fecha]="${fecha}"))`);
+    
+    const horaReserva = hora.substring(0, 5);
+    const horaFin = sumarHora(horaReserva, 2); // 2 horas después
+    
+    // Verificar conflictos
+    const conflicto = (cesiones || []).some(c => {
+      const inicio = (c['Hora de inicio'] || '').substring(0, 5);
+      const fin = (c['Hora de finalización'] || '').substring(0, 5);
+      return hayConflictoHorario(horaReserva, horaFin, inicio, fin);
+    });
+    
+    if (conflicto) {
+      return res.json({ success: false, message: 'Horario no disponible' });
+    }
+
+    // Crear cesión
+    await appsheet('Cesiones', 'Add', null, [{
+      'Programa': 'Reserva Web',
+      'Centro Juvenil': centro,
+      'Tipo de Cesion': 'Externa',
+      'Espacio': salaId,
+      'EntidadID': usuario,
+      'Clasificacion': 'Reserva',
+      'Modalidad de Sesion': 'Presencial',
+      'Nombre': `Reserva ${salaNombre}`,
+      'Descripcion': `Reserva web por ${usuario}`,
+      'Fecha': fecha,
+      'Hora de inicio': horaReserva + ':00',
+      'Hora de finalización': horaFin + ':00',
+      'Duración': '02:00:00',
+      'Sala': salaNombre
+    }]);
+
+    console.log(`✅ Reserva creada exitosamente`);
+    res.json({ success: true, message: 'Reserva confirmada' });
+  } catch (e) {
+    console.error('Error al reservar:', e);
+    res.status(500).json({ success: false, message: 'Error al reservar' });
+  }
+});
+
+// HELPERS
+function sumarHora(hora, horas) {
+  const [h, m] = hora.split(':').map(Number);
+  const nueva = h + horas;
+  return `${String(nueva).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function hayConflictoHorario(inicioA, finA, inicioB, finB) {
+  return inicioA < finB && finA > inicioB;
+};
 
 
 // WARMUP & HEALTH
