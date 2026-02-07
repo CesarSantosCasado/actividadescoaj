@@ -265,6 +265,150 @@ app.get('/api/exposiciones', async (req, res) => {
   }
 });
 
+// ESPACIOS - BACKEND COMPLETO
+app.get('/api/espacios', async (req, res) => {
+  try {
+    const espacios = await appsheet('SalasPorEspacio', 'Find', 'Filter(SalasPorEspacio, true)');
+    
+    const espaciosMapeados = (espacios || []).map(e => ({
+      id: e.IdSala,
+      nombre: e.Nombre,
+      tipo: e.Tipo,
+      coaj: e.COAJ,
+      capacidad: getCapacidadPorNombre(e.Nombre), // Función helper
+      desc: `Espacio ${e.Nombre} en ${e.COAJ}`,
+      photos: [], // TODO: manejar Related FotosPorSalaEspacios si necesario
+      precio: getPrecioPorTipo(e.Tipo),
+      duracion: getDuracionPorTipo(e.Tipo)
+    }));
+    
+    res.json({ espacios: espaciosMapeados });
+  } catch (e) {
+    res.status(500).json({ error: 'Error al obtener espacios', espacios: [] });
+  }
+});
+
+// DISPONIBILIDAD - BASADA EN CESIONES
+app.get('/api/disponibilidad/:salaNombre/:fecha', async (req, res) => {
+  const { salaNombre, fecha } = req.params;
+  try {
+    // Obtener cesiones para esa sala y fecha
+    const cesiones = await appsheet('Cesiones', 'Find', 
+      `Filter(Cesiones, AND([Sala]="${salaNombre}", [Fecha]="${fecha}"))`);
+    
+    const horasOcupadas = [];
+    
+    (cesiones || []).forEach(cesion => {
+      const inicio = cesion['Hora de inicio'];
+      const fin = cesion['Hora de finalización'];
+      
+      if (inicio && fin) {
+        // Convertir a horas simples (ej: "09:00:00" → "09:00")
+        const horaInicio = inicio.substring(0, 5);
+        const horaFin = fin.substring(0, 5);
+        horasOcupadas.push({ inicio: horaInicio, fin: horaFin });
+      }
+    });
+    
+    res.json({ horasOcupadas });
+  } catch (e) {
+    res.status(500).json({ error: 'Error disponibilidad', horasOcupadas: [] });
+  }
+});
+
+// RESERVAR - CREAR CESIÓN
+app.post('/api/reservar', async (req, res) => {
+  const { salaId, salaNombre, centro, fecha, hora, usuario } = req.body;
+  if (!salaNombre || !fecha || !hora || !usuario) {
+    return res.json({ success: false, message: 'Datos incompletos' });
+  }
+
+  try {
+    // Verificar disponibilidad
+    const cesiones = await appsheet('Cesiones', 'Find', 
+      `Filter(Cesiones, AND([Sala]="${salaNombre}", [Fecha]="${fecha}"))`);
+    
+    const horaReserva = hora.substring(0, 5); // "10:00"
+    const horaFin = sumarHora(horaReserva, 2); // 2 horas después
+    
+    // Verificar conflictos
+    const conflicto = (cesiones || []).some(c => {
+      const inicio = (c['Hora de inicio'] || '').substring(0, 5);
+      const fin = (c['Hora de finalización'] || '').substring(0, 5);
+      return hayConflictoHorario(horaReserva, horaFin, inicio, fin);
+    });
+    
+    if (conflicto) {
+      return res.json({ success: false, message: 'Horario no disponible' });
+    }
+
+    // Crear cesión
+    await appsheet('Cesiones', 'Add', null, [{
+      'Programa': 'Reserva Web',
+      'Centro Juvenil': centro,
+      'Tipo de Cesion': 'Externa',
+      'Espacio': salaId,
+      'EntidadID': usuario,
+      'Clasificacion': 'Reserva',
+      'Modalidad de Sesion': 'Presencial',
+      'Nombre': `Reserva ${salaNombre}`,
+      'Descripcion': `Reserva web por ${usuario}`,
+      'Fecha': fecha,
+      'Hora de inicio': horaReserva + ':00',
+      'Hora de finalización': horaFin + ':00',
+      'Duración': '02:00:00',
+      'Sala': salaNombre
+    }]);
+
+    res.json({ success: true, message: 'Reserva confirmada' });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Error al reservar' });
+  }
+});
+
+// HELPERS
+function getCapacidadPorNombre(nombre) {
+  const capacidades = {
+    'Dinamización': 25, 'Dinamización 1': 25, 'Dinamización 2': 20,
+    'Sala 3': 15, 'Sala 4': 12, 'Sala de espejos': 15,
+    'Coworking': 20, 'Cyber': 12, 'Sala de ordenadores': 18,
+    'Sala de juegos': 20, 'Artes escénicas 1 (Espejos)': 20,
+    'Espacio de arte': 12, 'Oficina de Información Juvenil': 5,
+    'Psicología y coaching': 2
+  };
+  return capacidades[nombre] || 10;
+}
+
+function getPrecioPorTipo(tipo) {
+  const precios = {
+    'Ocio y Tiempo Libre': 'Gratuito',
+    'Estudio y formación': 'Gratuito', 
+    'Música y desarrollo': '5 €/hora',
+    'Otros': 'Gratuito'
+  };
+  return precios[tipo] || 'Gratuito';
+}
+
+function getDuracionPorTipo(tipo) {
+  const duraciones = {
+    'Ocio y Tiempo Libre': '2 horas',
+    'Estudio y formación': '4 horas',
+    'Música y desarrollo': '1 hora', 
+    'Otros': '30 min'
+  };
+  return duraciones[tipo] || '2 horas';
+}
+
+function sumarHora(hora, horas) {
+  const [h, m] = hora.split(':').map(Number);
+  const nueva = h + horas;
+  return `${String(nueva).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function hayConflictoHorario(inicioA, finA, inicioB, finB) {
+  return inicioA < finB && finA > inicioB;
+};
+
 // ACTUALIZAR DNI/FOTO - USA WEB APP
 app.post('/api/actualizar-foto', async (req, res) => {
   const { alias, fotoUrl } = req.body;
@@ -286,6 +430,8 @@ app.post('/api/actualizar-foto', async (req, res) => {
     res.status(500).json({ success: false, message: 'Error al actualizar' });
   }
 });
+
+
 
 // WARMUP & HEALTH
 app.get('/api/warmup', (req, res) => res.json({ status: 'warm', ts: Date.now() }));
