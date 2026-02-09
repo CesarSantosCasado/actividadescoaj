@@ -275,11 +275,11 @@ app.get('/api/espacios', async (req, res) => {
       nombre: e.Nombre,
       tipo: e.Tipo,
       coaj: e.COAJ,
-      capacidad: getCapacidadPorNombre(e.Nombre), // Función helper
-      desc: `Espacio ${e.Nombre} en ${e.COAJ}`,
-      photos: [], // TODO: manejar Related FotosPorSalaEspacios si necesario
-      precio: getPrecioPorTipo(e.Tipo),
-      duracion: getDuracionPorTipo(e.Tipo)
+      capacidad: e.Capacidad || '',
+      desc: e.Descripcion || `Espacio ${e.Nombre} en ${e.COAJ}`,
+      photos: [],
+      precio: 'Gratuito',
+      duracion: e.Duracion || ''
     }));
     
     res.json({ espacios: espaciosMapeados });
