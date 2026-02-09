@@ -65,14 +65,12 @@ app.post('/api/verificar-alias', async (req, res) => {
     res.json({ disponible: false, error: true });
   }
 });
-
 // REGISTRO - CON CENTRO JUVENIL
 app.post('/api/registro', async (req, res) => {
   const { alias, contrasena, usuario, email, fechaNacimiento, sexo, municipio, distrito, direccion, movil, centroJuvenil } = req.body;
   if (!alias || !contrasena || !usuario || !email) {
     return res.json({ success: false, message: 'Alias, contraseña, nombre y email son requeridos' });
   }
-
   try {
     const existe = await appsheet('Usuarios', 'Find', `Filter(Usuarios, [Alias]="${alias}")`);
     if (existe?.length > 0) return res.json({ success: false, message: 'El alias ya está registrado', existe: true });
@@ -94,9 +92,53 @@ app.post('/api/registro', async (req, res) => {
       "Sanciones:": "FALSE"
     }]);
 
-    res.json({ success: true, message: 'Usuario registrado correctamente' });
+    let esMenor = false;
+    if (fechaNacimiento) {
+      let nac;
+      if (typeof fechaNacimiento === 'string' && fechaNacimiento.includes('/')) {
+        const p = fechaNacimiento.split(' ')[0].split('/');
+        nac = new Date(+p[2], +p[0] - 1, +p[1]);
+      } else {
+        nac = new Date(fechaNacimiento);
+      }
+      if (!isNaN(nac)) {
+        const hoy = new Date();
+        let edad = hoy.getFullYear() - nac.getFullYear();
+        const mes = hoy.getMonth() - nac.getMonth();
+        if (mes < 0 || (mes === 0 && hoy.getDate() < nac.getDate())) edad--;
+        esMenor = edad >= 14 && edad < 18;
+      }
+    }
+
+    res.json({ success: true, message: 'Usuario registrado correctamente', esMenor, alias });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Error al registrar' });
+  }
+});
+
+
+// AUTORIZACIÓN MENORES
+app.post('/api/autorizacion-menores', async (req, res) => {
+  const { usuario, correo, nombreApellidos, dni, menorNombre, telefono, correoContacto } = req.body;
+  if (!usuario || !nombreApellidos || !dni || !menorNombre || !telefono || !correoContacto) {
+    return res.json({ success: false, message: 'Todos los campos son obligatorios' });
+  }
+
+  try {
+    await appsheet('AutorizaciondeMenores', 'Add', null, [{
+      Usuario: usuario,
+      Correo: correo || '',
+      'Nombre y Apellidos': nombreApellidos,
+      'DNI / NIE / PASAPORTE': dni,
+      'Como Padre/ Madre/ Tutor-a de': menorNombre,
+      'Teléfono de contacto': telefono,
+      'Correo de contacto': correoContacto,
+      'AUTORIZO': 'AUTORIZO'
+    }]);
+
+    res.json({ success: true, message: 'Autorización registrada' });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Error al registrar autorización' });
   }
 });
 
